@@ -15,7 +15,7 @@ class SimpleClient:
         self.client = client
 
     def status(self, property):
-	return self.client.status()[property]
+        return self.client.status()[property]
 
     def volume(self, change=None):
         if(change):
@@ -27,14 +27,14 @@ class SimpleClient:
         return self.status('state') == 'play'
 
     def play_pause(self):
-	if not self.client.playlist():
-	    print('load "default" playlist')
-	    self.client.load('default')
+        if not self.client.playlist():
+            print('load "default" playlist')
+            self.client.load('default')
         if self.is_playing():
-	    print('pause')
+            print('pause')
             self.client.stop()
         else:
-	    print('play')
+            print('play')
             self.client.play()
 
 class VU:
@@ -54,12 +54,12 @@ if __name__ == "__main__":
     @phatbeat.on(phatbeat.BTN_VOLUP)
     def volume_up(pin):
         print(client.volume(+3))
-	vu.bar(client.volume(), 50)
+        vu.bar(client.volume(), 50)
 
     @phatbeat.on(phatbeat.BTN_VOLDN)
     def volume_down(pin):
         print(client.volume(-3))
-	vu.bar(client.volume(), 50)
+        vu.bar(client.volume(), 50)
 
     @phatbeat.on(phatbeat.BTN_PLAYPAUSE)
     def play_pause(pin):
