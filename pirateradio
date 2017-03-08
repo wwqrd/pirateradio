@@ -37,15 +37,68 @@ class SimpleClient:
             print('play')
             self.client.play()
 
+class Pixel:
+    def __init__(self, id):
+        self.id = id
+        self.default = {
+            'r': 0,
+            'g': 0,
+            'b': 0,
+            'brightness': 0
+        }
+
+    def clear(self):
+        self.set(self.default, self.default)
+
+    def set(self, state, velocity=self.default):
+        self.state = state
+        self.velocity = velocity
+        self.clock = time.time()
+
+    def render(self):
+        state = self.state
+        phatbeat.set_pixel(self.id, state['r'], state['g'], state['b'], state['brightness'])
+        phatbeat.show()
+
+    def loop(self):
+        delta = time.time() - self.clock
+        new_state = {
+            'r': self.state['r'] + self.velocity['r'] * delta,
+            'g': self.state['g'] + self.velocity['g'] * delta,
+            'b': self.state['b'] + self.velocity['b'] * delta,
+            'brightness': self.state['brightness'] + self.velocity['brightness'] * delta
+        }
+        self.state = new_state
+        self.clock = time.time()
+
 class VU:
+    def __init__(self, id):
+        self.pixels = list(map(lambda x: Pixel(x), range(0, 15)))
+
+    def loop(self):
+        for i in self.pixels:
+            self.pixels[i].loop()
+
+    def render(self):
+        for i in self.pixels:
+            self.pixels[i].render()
+
     def bar(self, value, max_value):
         last_command_time = time.time()
         level = min(7, int(round(7*(float(value)/max_value))))
-        phatbeat.clear()
-        for x in range(0, level):
-            phatbeat.set_pixel(7 - x, 255, 255, 255, brightness=0.1, channel=0)
-            phatbeat.set_pixel(x, 255, 255, 255, brightness=0.1, channel=1)
-        phatbeat.show()
+        for x in range(0, 7):
+            if(x < level):
+                self.pixels[x].set({
+                    'r': 100,
+                    'g': 100,
+                    'b': 100,
+                    'brightness': 0.2
+                }, {
+                    'r': 0,
+                    'g': 0,
+                    'b': 0,
+                    'brightness': -0.01
+                })
 
 if __name__ == "__main__":
     vu = VU()
@@ -68,6 +121,8 @@ if __name__ == "__main__":
     try:
         while True:
             time.sleep(0.1)
+            vu.loop()
+            vu.render()
 
     except KeyboardInterrupt:
         pass
