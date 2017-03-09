@@ -9,33 +9,38 @@ from mpd import MPDClient
 
 class SimpleClient:
     def __init__(self):
-        client = MPDClient()
-        client.timeout = 10
-        client.connect("localhost", 6600)
-        self.client = client
+        self.mpd_client = None
+
+    def client(self):
+        if self.mpd_client == None:
+            mpd_client = MPDClient()
+            mpd_client.timeout = 10
+            mpd_client.connect("localhost", 6600)
+            self.mpd_client = mpd_client
+        return self.mpd_client
 
     def status(self, property):
-        return self.client.status()[property]
+        return self.client().status()[property]
 
     def volume(self, change=None):
         if(change):
             new_volume = int(self.status('volume')) + change
-            self.client.setvol(new_volume)
+            self.client().setvol(new_volume)
         return int(self.status('volume'))
 
     def is_playing(self):
         return self.status('state') == 'play'
 
     def play_pause(self):
-        if not self.client.playlist():
+        if not self.client().playlist():
             print('load "default" playlist')
-            self.client.load('default')
+            self.client().load('default')
         if self.is_playing():
             print('pause')
-            self.client.stop()
+            self.client().stop()
         else:
             print('play')
-            self.client.play()
+            self.client().play()
 
 class Pixel:
     def __init__(self, id):
