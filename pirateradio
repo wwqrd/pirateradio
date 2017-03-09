@@ -51,61 +51,66 @@ class SimpleClient:
 class Pixel:
     def __init__(self, id):
         self.id = id
-        self.default = {
+        default = {
             'r': 0,
             'g': 0,
             'b': 0,
             'brightness': 0
         }
+        self.default = default
+        self.state = default
+        self.velocity = default
+        self.clock = time.time()
 
     def clear(self):
         self.set(self.default, self.default)
 
-    def set(self, state, velocity=self.default):
+    def set(self, state, velocity=None):
         self.state = state
+        if velocity == None:
+            velocity = self.default
         self.velocity = velocity
         self.clock = time.time()
 
     def render(self):
         state = self.state
         phatbeat.set_pixel(self.id, state['r'], state['g'], state['b'], state['brightness'])
-        phatbeat.show()
 
     def loop(self):
         delta = time.time() - self.clock
         new_state = {
-            'r': self.state['r'] + self.velocity['r'] * delta,
-            'g': self.state['g'] + self.velocity['g'] * delta,
-            'b': self.state['b'] + self.velocity['b'] * delta,
-            'brightness': self.state['brightness'] + self.velocity['brightness'] * delta
+            'r': min(255, max(0, self.state['r'] + self.velocity['r'] * delta)),
+            'g': min(255, max(0, self.state['g'] + self.velocity['g'] * delta)),
+            'b': min(255, max(0, self.state['b'] + self.velocity['b'] * delta)),
+            'brightness': min(1, max(0, self.state['brightness'] + self.velocity['brightness'] * delta))
         }
         self.state = new_state
         self.clock = time.time()
 
 class VU:
-    def __init__(self, id):
-        self.pixels = list(map(lambda x: Pixel(x), range(0, 15)))
+    def __init__(self):
+        self.pixels = list(map(lambda x: Pixel(x), range(0, 16)))
 
     def loop(self):
-        for i in self.pixels:
-            self.pixels[i].loop()
+        for pixel in self.pixels:
+            pixel.loop()
 
     def render(self):
-        for i in self.pixels:
-            self.pixels[i].render()
+        for pixel in self.pixels:
+            pixel.render()
 
     def flash(self):
-        for x in range(0, 7):
-            self.pixels[x].set({
+        for pixel in self.pixels:
+            pixel.set({
                 'r': 100,
                 'g': 100,
                 'b': 100,
-                'brightness': 0.2
+                'brightness': 0.5
             }, {
-                'r': 0,
+                'r': 100,
                 'g': 0,
                 'b': 0,
-                'brightness': -0.01
+                'brightness': 0
             })
 
     def bar(self, value, max_value):
@@ -126,9 +131,8 @@ class VU:
                 })
 
 if __name__ == "__main__":
-    vu = VU()
     client = SimpleClient()
-
+    vu = VU()
     vu.flash()
 
     @phatbeat.on(phatbeat.BTN_VOLUP)
@@ -147,9 +151,10 @@ if __name__ == "__main__":
 
     try:
         while True:
-            time.sleep(0.1)
             vu.loop()
             vu.render()
+            phatbeat.show()
+            time.sleep(1/24.0)
 
     except KeyboardInterrupt:
         pass
