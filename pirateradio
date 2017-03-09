@@ -11,6 +11,7 @@ class SimpleClient:
     def __init__(self):
         self.mpd_client = None
 
+    @property
     def client(self):
         if self.mpd_client == None:
             mpd_client = MPDClient()
@@ -20,27 +21,32 @@ class SimpleClient:
         return self.mpd_client
 
     def status(self, property):
-        return self.client().status()[property]
+        return self.client.status()[property]
 
-    def volume(self, change=None):
-        if(change):
-            new_volume = int(self.status('volume')) + change
-            self.client().setvol(new_volume)
+    @property
+    def volume(self):
         return int(self.status('volume'))
 
+    @volume.setter
+    def volume(self, change):
+        new_volume = self.volume + change
+        self.client.setvol(new_volume)
+        return self.volume
+
+    @property
     def is_playing(self):
         return self.status('state') == 'play'
 
     def play_pause(self):
-        if not self.client().playlist():
+        if not self.client.playlist():
             print('load "default" playlist')
-            self.client().load('default')
-        if self.is_playing():
+            self.client.load('default')
+        if self.is_playing:
             print('pause')
-            self.client().stop()
+            self.client.stop()
         else:
             print('play')
-            self.client().play()
+            self.client.play()
 
 class Pixel:
     def __init__(self, id):
@@ -88,6 +94,20 @@ class VU:
         for i in self.pixels:
             self.pixels[i].render()
 
+    def flash(self):
+        for x in range(0, 7):
+            self.pixels[x].set({
+                'r': 100,
+                'g': 100,
+                'b': 100,
+                'brightness': 0.2
+            }, {
+                'r': 0,
+                'g': 0,
+                'b': 0,
+                'brightness': -0.01
+            })
+
     def bar(self, value, max_value):
         last_command_time = time.time()
         level = min(7, int(round(7*(float(value)/max_value))))
@@ -108,6 +128,8 @@ class VU:
 if __name__ == "__main__":
     vu = VU()
     client = SimpleClient()
+
+    vu.flash()
 
     @phatbeat.on(phatbeat.BTN_VOLUP)
     def volume_up(pin):
