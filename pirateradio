@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from contextlib import contextmanager
 import time
 import os
 import subprocess
@@ -11,42 +12,63 @@ class SimpleClient:
     def __init__(self):
         self.mpd_client = None
 
+    @contextmanager
+    def connection(self):
+        try:
+            self.client.connect("localhost", 6600)
+            yield
+        finally:
+            self.client.close()
+            self.client.disconnect()
+
     @property
     def client(self):
         if self.mpd_client == None:
             mpd_client = MPDClient()
             mpd_client.timeout = 10
-            mpd_client.connect("localhost", 6600)
             self.mpd_client = mpd_client
         return self.mpd_client
 
     def status(self, property):
-        return self.client.status()[property]
+        with self.connection():
+            try:
+                return self.client.status()[property]
+            except:
+                return None
 
-    @property
-    def volume(self):
-        return int(self.status('volume'))
-
-    @volume.setter
-    def volume(self, change):
-        new_volume = self.volume + change
-        self.client.setvol(new_volume)
-        return self.volume
+    def volume(self, change=0):
+        print('volume!')
+        with self.connection():
+            try:
+                print('volume?')
+                new_volume = min(35, int(self.status('volume')) + change)
+                self.client.setvol(new_volume)
+                return new_volume
+            except:
+                return 0
 
     @property
     def is_playing(self):
-        return self.status('state') == 'play'
+        with self.connection():
+            try:
+                return self.status('state') == 'play'
+            except:
+                return None
 
     def play_pause(self):
-        if not self.client.playlist():
-            print('load "default" playlist')
-            self.client.load('default')
-        if self.is_playing:
-            print('pause')
-            self.client.stop()
-        else:
-            print('play')
-            self.client.play()
+        with self.connection():
+            try:
+                if not self.client.playlist():
+                    print('load "default" playlist')
+                    self.client.load('default')
+                if self.is_playing:
+                    print('pause')
+                    self.client.stop()
+                else:
+                    print('play')
+                    self.client.play()
+            except:
+                return None
 
 class Pixel:
     def __init__(self, id):
@@ -99,36 +121,55 @@ class VU:
         for pixel in self.pixels:
             pixel.render()
 
+    def blink(self):
+        self.pixels[0].set({
+            'r': 200,
+            'g': 200,
+            'b': 200,
+            'brightness': 0.25
+        }, {
+            'r': 0,
+            'g': 0,
+            'b': 0,
+            'brightness': -0.5
+        })
+
     def flash(self):
         for pixel in self.pixels:
             pixel.set({
-                'r': 100,
-                'g': 100,
-                'b': 100,
-                'brightness': 0.5
+                'r': 200,
+                'g': 200,
+                'b': 200,
+                'brightness': 0.25
             }, {
-                'r': 100,
+                'r': 0,
                 'g': 0,
                 'b': 0,
-                'brightness': 0
+                'brightness': -0.5
             })
 
     def bar(self, value, max_value):
         last_command_time = time.time()
         level = min(7, int(round(7*(float(value)/max_value))))
-        for x in range(0, 7):
+        green = {
+            'r': 50,
+            'g': 200,
+            'b': 50,
+            'brightness': 0.25
+        }
+        velocity = {
+            'r': 0,
+            'g': 0,
+            'b': 0,
+            'brightness': -0.5
+        }
+        for x in range(0, 8):
             if(x < level):
-                self.pixels[x].set({
-                    'r': 100,
-                    'g': 100,
-                    'b': 100,
-                    'brightness': 0.2
-                }, {
-                    'r': 0,
-                    'g': 0,
-                    'b': 0,
-                    'brightness': -0.01
-                })
+                self.pixels[7 - x].set(green, velocity)
+                self.pixels[x + 8].set(green, velocity)
+            else:
+                self.pixels[7 - x].clear()
+                self.pixels[x + 8].clear()
 
 if __name__ == "__main__":
     client = SimpleClient()
@@ -138,12 +179,12 @@ if __name__ == "__main__":
     @phatbeat.on(phatbeat.BTN_VOLUP)
     def volume_up(pin):
         print(client.volume(+3))
-        vu.bar(client.volume(), 50)
+        vu.bar(client.volume(), 35)
 
     @phatbeat.on(phatbeat.BTN_VOLDN)
     def volume_down(pin):
         print(client.volume(-3))
-        vu.bar(client.volume(), 50)
+        vu.bar(client.volume(), 35)
 
     @phatbeat.on(phatbeat.BTN_PLAYPAUSE)
     def play_pause(pin):
