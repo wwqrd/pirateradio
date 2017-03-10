@@ -9,64 +9,54 @@ import phatbeat
 from mpd import MPDClient
 
 class SimpleClient:
-    def __init__(self):
-        self.mpd_client = None
 
     @contextmanager
-    def connection(self):
-        try:
-            self.client.connect("localhost", 6600)
-            yield
-        finally:
-            self.client.close()
-            self.client.disconnect()
-
-    @property
     def client(self):
-        if self.mpd_client == None:
-            mpd_client = MPDClient()
-            mpd_client.timeout = 10
-            self.mpd_client = mpd_client
-        return self.mpd_client
+        client = MPDClient()
+        client.timeout = 10
+        try:
+            client.connect("localhost", 6600)
+            yield client
+        finally:
+            client.close()
+            client.disconnect()
 
     def status(self, property):
-        with self.connection():
+        with self.client() as client:
             try:
-                return self.client.status()[property]
+                return client.status()[property]
             except:
                 return None
 
     def volume(self, change=0):
-        print('volume!')
-        with self.connection():
+        print('volume?')
+        with self.client() as client:
             try:
-                print('volume?')
-                new_volume = min(35, int(self.status('volume')) + change)
-                self.client.setvol(new_volume)
+                new_volume = min(35, int(client.status()['volume']) + change)
+                client.setvol(new_volume)
                 return new_volume
-            except:
-                return 0
-
-    @property
-    def is_playing(self):
-        with self.connection():
-            try:
-                return self.status('state') == 'play'
             except:
                 return None
 
+    @property
+    def is_playing(self):
+        return self.status('state') == 'play'
+
     def play_pause(self):
-        with self.connection():
+        with self.client() as client:
             try:
-                if not self.client.playlist():
+                if not client.playlist():
                     print('load "default" playlist')
-                    self.client.load('default')
+                    client.load('default')
+
                 if self.is_playing:
                     print('pause')
-                    self.client.stop()
+                    client.stop()
+                    return False
                 else:
                     print('play')
-                    self.client.play()
+                    client.play()
+                    return True
             except:
                 return None
 
@@ -175,6 +165,10 @@ if __name__ == "__main__":
     client = SimpleClient()
     vu = VU()
     vu.flash()
+    print(client.play_pause())
+    print(client.volume(+3))
+    print(client.volume(-3))
+    print(client.play_pause())
 
     @phatbeat.on(phatbeat.BTN_VOLUP)
     def volume_up(pin):
