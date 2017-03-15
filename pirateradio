@@ -8,6 +8,9 @@ import re
 import phatbeat
 from mpd import MPDClient
 
+MAX_VOLUME = 35
+DEFAULT_PLAYLIST = 'default'
+
 class SimpleClient:
 
     @contextmanager
@@ -23,20 +26,23 @@ class SimpleClient:
 
     def status(self, property):
         with self.client() as client:
-            try:
-                return client.status()[property]
-            except:
-                return None
+            return client.status()[property]
+
+    def next_track(self):
+        with self.client() as client:
+            client.repeat(1)
+            client.next()
+
+    def previous_track(self):
+        with self.client() as client:
+            client.repeat(1)
+            client.previous()
 
     def volume(self, change=0):
-        print('volume?')
         with self.client() as client:
-            try:
-                new_volume = min(35, int(client.status()['volume']) + change)
-                client.setvol(new_volume)
-                return new_volume
-            except:
-                return None
+            new_volume = max(0, min(MAX_VOLUME, int(client.status()['volume']) + change))
+            client.setvol(new_volume)
+            return new_volume
 
     @property
     def is_playing(self):
@@ -44,21 +50,16 @@ class SimpleClient:
 
     def play_pause(self):
         with self.client() as client:
-            try:
-                if not client.playlist():
-                    print('load "default" playlist')
-                    client.load('default')
+            if not client.playlist():
+                print('load playlist')
+                client.load(DEFAULT_PLAYLIST)
 
-                if self.is_playing:
-                    print('pause')
-                    client.stop()
-                    return False
-                else:
-                    print('play')
-                    client.play()
-                    return True
-            except:
-                return None
+            if self.is_playing:
+                print('stop')
+                client.stop()
+            else:
+                print('play')
+                client.play()
 
 class Pixel:
     def __init__(self, id):
@@ -111,7 +112,7 @@ class VU:
         for pixel in self.pixels:
             pixel.render()
 
-    def blink(self):
+    def indicate(self):
         self.pixels[0].set({
             'r': 200,
             'g': 200,
@@ -124,65 +125,75 @@ class VU:
             'brightness': -0.5
         })
 
-    def flash(self):
-        for pixel in self.pixels:
-            pixel.set({
-                'r': 200,
-                'g': 200,
-                'b': 200,
-                'brightness': 0.25
-            }, {
-                'r': 0,
-                'g': 0,
-                'b': 0,
-                'brightness': -0.5
-            })
-
-    def bar(self, value, max_value):
-        last_command_time = time.time()
-        level = min(7, int(round(7*(float(value)/max_value))))
-        green = {
-            'r': 50,
-            'g': 200,
-            'b': 50,
-            'brightness': 0.25
-        }
-        velocity = {
-            'r': 0,
-            'g': 0,
-            'b': 0,
-            'brightness': -0.5
-        }
+    def level(self, value, color, delta, left=False):
+        level = max(0, min(7, round(value * 8)))
         for x in range(0, 8):
-            if(x < level):
-                self.pixels[7 - x].set(green, velocity)
-                self.pixels[x + 8].set(green, velocity)
+            j = x + 8 if left else 7 - x
+            if(x <= level):
+                self.pixels[j].set(color, delta)
             else:
-                self.pixels[7 - x].clear()
-                self.pixels[x + 8].clear()
+                self.pixels[j].clear()
+
+green = {
+    'r': 50,
+    'g': 200,
+    'b': 50,
+    'brightness': 0.25
+}
+
+fade_out = {
+    'r': 0,
+    'g': 0,
+    'b': 0,
+    'brightness': -0.25
+}
+
+def vu_volume(vu, volume):
+    level = volume/float(MAX_VOLUME)
+    vu.level(level, green, fade_out)
+    vu.level(level, green, fade_out, True)
 
 if __name__ == "__main__":
     client = SimpleClient()
     vu = VU()
-    vu.flash()
-    print(client.play_pause())
-    print(client.volume(+3))
-    print(client.volume(-3))
-    print(client.play_pause())
+    vu.indicate()
+
+    @phatbeat.on(phatbeat.BTN_FASTFWD)
+    def next_track(pin):
+        vu.indicate()
+        print('next')
+        client.next_track()
+
+    @phatbeat.on(phatbeat.BTN_REWIND)
+    def previous_track(pin):
+        vu.indicate()
+        print('previous')
+        client.previous_track()
 
     @phatbeat.on(phatbeat.BTN_VOLUP)
     def volume_up(pin):
+        print('volume+')
         print(client.volume(+3))
-        vu.bar(client.volume(), 35)
+        vu_volume(vu, client.volume())
 
     @phatbeat.on(phatbeat.BTN_VOLDN)
     def volume_down(pin):
+        print('volume-')
         print(client.volume(-3))
-        vu.bar(client.volume(), 35)
+        vu_volume(vu, client.volume())
 
     @phatbeat.on(phatbeat.BTN_PLAYPAUSE)
     def play_pause(pin):
-        print(client.play_pause())
+        vu.indicate()
+        print('play/pause')
+        client.play_pause()
+
+    @phatbeat.on(phatbeat.BTN_ONOFF)
+    def hold_onoff(pin):
+        vu.indicate()
+        print('shutdown')
+        time.sleep(3)
+        os.system("shutdown now -h")
 
     try:
         while True:
